@@ -2,7 +2,8 @@ name: Trigger Jenkins Job
 
 on:
   workflow_dispatch:
-    
+
+#All this secret in the git repo secret variables  
 jobs:
   trigger:
     name: Build
