@@ -1,61 +1,156 @@
-pipeline {
-  agent any
-  environment {
-    ECR_REPOSITORY = credentials('ECR_REPOSITORY')
-    AWS_ACCOUNT_ID = credentials('AWS_ACCOUNT_ID')
-    AWS_ACCESS_KEY_ID = credentials('AWS_ACCESS_KEY_ID')
-    AWS_SECRET_ACCESS_KEY = credentials('AWS_SECRET_ACCESS_KEY')
-  }
+// pipeline {
+//   agent any
+//   environment {
+//     ECR_REPOSITORY = credentials('ECR_REPOSITORY')
+//     AWS_ACCOUNT_ID = credentials('AWS_ACCOUNT_ID')
+//     AWS_ACCESS_KEY_ID = credentials('AWS_ACCESS_KEY_ID')
+//     AWS_SECRET_ACCESS_KEY = credentials('AWS_SECRET_ACCESS_KEY')
+//   }
   
-  stages {
-    stage('Continuous Integration') {
-      steps {
-        script {
-          echo "Linting repository"
-          echo "Running unit tests"
-        }
-      }
-    }
+//   stages {
+//     stage('Continuous Integration') {
+//       steps {
+//         script {
+//           echo "Linting repository"
+//           echo "Running unit tests"
+//         }
+//       }
+//     } 
 
-    stage('Login to ECR') {
-      steps {
-        script {
-          sh 'aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com'
-        }
+//     stage('Login to ECR') {
+//       steps {
+//         script {
+//           sh 'aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com'
+//         }
 
-      }
-    }
+//       }
+//     }
 
-    stage('Build Image') {
-      steps {
-        script {
-          sh 'docker build -t ${ECR_REPOSITORY}:latest .'
-        }
+//     stage('Build Image') {
+//       steps {
+//         script {
+//           sh 'docker build -t ${ECR_REPOSITORY}:latest .'
+//         }
 
-      }
-    }
+//       }
+//     }
 
-    stage('Push Image') {
-      steps {
-        script {
-          sh 'docker push ${ECR_REPOSITORY}:latest'
-        }
+//     stage('Push Image') {
+//       steps {
+//         script {
+//           sh 'docker push ${ECR_REPOSITORY}:latest'
+//         }
 
-      }
-    }
+//       }
+//     }
 
-    stage('Continuous Deployment') {
-      steps {
-        sshagent(['ssh_key']) {
-          sh "ssh -o StrictHostKeyChecking=no -l ubuntu 13.126.146.4 'cd /home/ubuntu/ && wget https://raw.githubusercontent.com/entbappy/Chest-Disease-Classification-from-Chest-CT-Scan-Image/main/docker-compose.yml && export IMAGE_NAME=${ECR_REPOSITORY}:latest && aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com && docker compose up -d '"
-        }
-      }
+//     stage('Continuous Deployment') {
+//       steps {
+//         sshagent(['ssh_key']) {
+//           sh "ssh -o StrictHostKeyChecking=no -l ubuntu 13.126.146.4 'cd /home/ubuntu/ && wget https://raw.githubusercontent.com/entbappy/Chest-Disease-Classification-from-Chest-CT-Scan-Image/main/docker-compose.yml && export IMAGE_NAME=${ECR_REPOSITORY}:latest && aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com && docker compose up -d '"
+//         }
+//       }
+//     }
+//   }
+
+//   post {
+//     always {
+//       sh 'docker system prune -f'
+//     }
+//   }
+// }
+
+pipeline {
+agent any
+
+environment {
+// ✅ Keep only AWS credentials (no need for ECR_REPOSITORY anymore)
+AWS_ACCOUNT_ID = credentials('AWS_ACCOUNT_ID')
+AWS_ACCESS_KEY_ID = credentials('AWS_ACCESS_KEY_ID')
+AWS_SECRET_ACCESS_KEY = credentials('AWS_SECRET_ACCESS_KEY')
+}
+
+stages {
+
+```
+stage('Continuous Integration') {
+  steps {
+    script {
+      echo "Linting repository"
+      echo "Running unit tests"
     }
   }
+}
 
-  post {
-    always {
-      sh 'docker system prune -f'
+stage('Login to ECR') {
+  steps {
+    script {
+      // ✅ FIX 1: Region corrected to ap-south-1
+      // ✅ FIX 2: Hardcoded your ECR URI login
+      sh '''
+      aws ecr get-login-password --region ap-south-1 | \
+      docker login --username AWS --password-stdin 032552344224.dkr.ecr.ap-south-1.amazonaws.com
+      '''
     }
   }
+}
+
+stage('Build Image') {
+  steps {
+    script {
+      // ✅ FIX 3: Hardcoded FULL ECR repo URI (VERY IMPORTANT)
+      sh '''
+      docker build -t 032552344224.dkr.ecr.ap-south-1.amazonaws.com/sign-lang:latest .
+      '''
+    }
+  }
+}
+
+stage('Push Image') {
+  steps {
+    script {
+      // ✅ FIX 4: Push using SAME full ECR URI
+      sh '''
+      docker push 032552344224.dkr.ecr.ap-south-1.amazonaws.com/sign-lang:latest
+      '''
+    }
+  }
+}
+
+stage('Continuous Deployment') {
+  steps {
+    sshagent(['ssh_key']) {
+      sh """
+      ssh -o StrictHostKeyChecking=no -l ubuntu 13.126.146.4 '
+      
+      # ✅ Go to home directory
+      cd /home/ubuntu/
+
+      # ✅ Download docker-compose file
+      wget -O docker-compose.yml https://raw.githubusercontent.com/entbappy/Chest-Disease-Classification-from-Chest-CT-Scan-Image/main/docker-compose.yml
+
+      # ✅ Set image name (hardcoded)
+      export IMAGE_NAME=032552344224.dkr.ecr.ap-south-1.amazonaws.com/sign-lang:latest
+
+      # ✅ Login to ECR from EC2
+      aws ecr get-login-password --region ap-south-1 | \
+      docker login --username AWS --password-stdin 032552344224.dkr.ecr.ap-south-1.amazonaws.com
+
+      # ✅ Run container
+      docker compose up -d
+      '
+      """
+    }
+  }
+}
+```
+
+}
+
+post {
+always {
+// ✅ Cleanup Docker
+sh 'docker system prune -f'
+}
+}
 }
